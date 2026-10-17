@@ -1,0 +1,9 @@
+{
+  "name": "ShotTracker",
+  "short_name": "ShotTracker",
+  "description": "Protótipo de estatísticas de arremessos de basquete",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#101827"
+}

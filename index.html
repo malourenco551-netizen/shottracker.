@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101827">
+  <title>ShotTracker — protótipo</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root { color-scheme: dark; --bg:#0b1220; --panel:#151f30; --muted:#9aa9bd; --line:#2a3850; --accent:#ff9f43; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; background:var(--bg); color:#f5f7fb; }
+    main { max-width:760px; margin:auto; padding:18px 14px 36px; }
+    header { display:flex; align-items:center; gap:12px; margin:8px 0 18px; }
+    .logo { display:grid; place-items:center; width:46px; height:46px; border-radius:14px; background:var(--accent); color:#18202c; font-size:25px; font-weight:900; }
+    h1 { margin:0; font-size:25px; letter-spacing:-.5px; }
+    .sub { color:var(--muted); font-size:13px; margin-top:3px; }
+    .notice { border:1px solid #72512d; background:#2a2118; color:#ffd9ae; border-radius:12px; padding:12px; font-size:13px; line-height:1.45; margin-bottom:14px; }
+    .camera { background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden; position:relative; aspect-ratio:4/3; display:grid; place-items:center; }
+    video { width:100%; height:100%; object-fit:cover; display:none; }
+    .camera-placeholder { text-align:center; padding:20px; color:var(--muted); }
+    .camera-placeholder strong { display:block; color:#fff; margin-bottom:6px; }
+    .camera-controls { display:flex; gap:8px; margin-top:10px; }
+    button { font:inherit; cursor:pointer; border:0; border-radius:11px; padding:12px 14px; font-weight:700; }
+    button:disabled { opacity:.4; cursor:not-allowed; }
+    .primary { background:var(--accent); color:#1b2431; flex:1; }
+    .secondary { background:#253249; color:#fff; }
+    .stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:16px 0; }
+    .stat { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:15px; }
+    .stat .label { color:var(--muted); font-size:12px; }
+    .stat .value { font-size:30px; font-weight:800; margin-top:4px; font-variant-numeric:tabular-nums; }
+    .stat .value small { font-size:14px; color:var(--muted); }
+    h2 { font-size:16px; margin:20px 0 9px; }
+    .actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .make { background:#174a37; color:#c9ffe6; }
+    .miss { background:#512b32; color:#ffd5da; }
+    .row { display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; margin-top:8px; }
+    .row span { color:var(--muted); font-size:13px; }
+    .small { font-size:12px; color:var(--muted); line-height:1.5; }
+    .footer { display:flex; gap:8px; margin-top:14px; }
+    .footer button { flex:1; }
+    @media(min-width:600px) { .stats { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">🏀</div>
+    <div><h1>ShotTracker</h1><div class="sub">Protótipo de treino · versão 0.1</div></div>
+  </header>
+
+  <div class="notice"><strong>Importante:</strong> esta primeira versão testa a câmera e o placar. Ainda não detecta arremessos automaticamente por IA. Os botões de acerto/erro são manuais; não use os números como estatística automática.</div>
+
+  <section class="camera">
+    <video id="video" playsinline autoplay muted></video>
+    <div class="camera-placeholder" id="placeholder">
+      <strong>Câmera desligada</strong>
+      Coloque o celular em um local firme, com a cesta e a trajetória da bola no enquadramento.
+    </div>
+  </section>
+  <div class="camera-controls">
+    <button class="primary" id="startCamera">Ativar câmera</button>
+    <button class="secondary" id="stopCamera" disabled>Desligar</button>
+  </div>
+
+  <section class="stats" aria-live="polite">
+    <div class="stat"><div class="label">Tentativas</div><div class="value" id="attempts">0</div></div>
+    <div class="stat"><div class="label">Cestas</div><div class="value" id="makes">0</div></div>
+    <div class="stat"><div class="label">Erros</div><div class="value" id="misses">0</div></div>
+    <div class="stat"><div class="label">Aproveitamento</div><div class="value" id="pct">0<small>%</small></div></div>
+  </section>
+
+  <h2>Registrar resultado manualmente</h2>
+  <div class="actions">
+    <button class="make" id="addMake">✓ Cesta convertida</button>
+    <button class="miss" id="addMiss">✕ Arremesso errado</button>
+  </div>
+  <div class="row"><div><strong>Sessão atual</strong><br><span id="sessionTime">00:00</span></div><button class="secondary" id="undo" disabled>Desfazer último</button></div>
+
+  <h2>Controles da sessão</h2>
+  <div class="footer">
+    <button class="secondary" id="reset">Zerar placar</button>
+    <button class="primary" id="save">Salvar resumo</button>
+  </div>
+  <p class="small" id="status" aria-live="polite">Pronto. Para usar a câmera, abra esta página por HTTPS ou em localhost.</p>
+  <p class="small">Privacidade: a câmera é processada pelo navegador e o protótipo não envia nem grava vídeo. Os dados do placar ficam apenas nesta página enquanto ela estiver aberta.</p>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let stream = null, history = [], startedAt = null, tick = null;
+  let makes = 0, misses = 0;
+  const update = () => {
+    $('attempts').textContent = makes + misses;
+    $('makes').textContent = makes;
+    $('misses').textContent = misses;
+    $('pct').innerHTML = (makes + misses ? Math.round(makes / (makes + misses) * 100) : 0) + '<small>%</small>';
+    $('undo').disabled = history.length === 0;
+  };
+  const timeText = () => {
+    const seconds = startedAt ? Math.floor((Date.now() - startedAt) / 1000) : 0;
+    $('sessionTime').textContent = String(Math.floor(seconds / 60)).padStart(2,'0') + ':' + String(seconds % 60).padStart(2,'0');
+  };
+  const add = kind => {
+    history.push(kind);
+    if (kind === 'make') makes++; else misses++;
+    update();
+  };
+  $('addMake').addEventListener('click', () => add('make'));
+  $('addMiss').addEventListener('click', () => add('miss'));
+  $('undo').addEventListener('click', () => {
+    const last = history.pop();
+    if (last === 'make') makes--; else if (last === 'miss') misses--;
+    update();
+  });
+  $('reset').addEventListener('click', () => {
+    if (!confirm('Zerar os números desta sessão?')) return;
+    history = []; makes = 0; misses = 0; update();
+    $('status').textContent = 'Placar zerado.';
+  });
+  $('save').addEventListener('click', () => {
+    const total = makes + misses;
+    const summary = `ShotTracker — resumo da sessão\nData: ${new Date().toLocaleString('pt-BR')}\nTentativas: ${total}\nCestas: ${makes}\nErros: ${misses}\nAproveitamento: ${total ? Math.round(makes / total * 100) : 0}%`;
+    const blob = new Blob([summary], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'shottracker-resumo.txt'; a.click();
+    URL.revokeObjectURL(url);
+    $('status').textContent = 'Resumo exportado para arquivo de texto.';
+  });
+  $('startCamera').addEventListener('click', async () => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}, audio:false});
+      $('video').srcObject = stream;
+      $('video').style.display = 'block';
+      $('placeholder').style.display = 'none';
+      $('startCamera').disabled = true; $('stopCamera').disabled = false;
+      $('status').textContent = 'Câmera ativa. Nesta versão, registre os resultados manualmente.';
+      if (!startedAt) { startedAt = Date.now(); tick = setInterval(timeText, 1000); }
+    } catch (e) {
+      $('status').textContent = 'Não foi possível abrir a câmera. Use HTTPS, permita o acesso à câmera e tente novamente. (' + e.name + ')';
+    }
+  });
+  $('stopCamera').addEventListener('click', () => {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; $('video').srcObject = null; $('video').style.display = 'none';
+    $('placeholder').style.display = 'block';
+    $('startCamera').disabled = false; $('stopCamera').disabled = true;
+    $('status').textContent = 'Câmera desligada.';
+  });
+  update(); timeText();
+})();
+</script>
+</body>
+</html>
